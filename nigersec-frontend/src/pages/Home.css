@@ -1,0 +1,194 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+body {
+  background: #07120A;
+  color: #F3F9F1;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  scroll-behavior: smooth;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Space+Grotesk:wght@500;600;700;800&display=swap');
+
+::selection {
+  background: #EAB308;
+  color: #07120A;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #07120A;
+}
+::-webkit-scrollbar-thumb {
+  background: #EAB308;
+  border-radius: 3px;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.fade-up {
+  animation: fadeUp 0.5s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+}
+
+.stat-card {
+  background: #0D1F12;
+  border: 1px solid #1F3A24;
+  border-radius: 1rem;
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+.stat-card:hover {
+  border-color: #EAB308;
+  transform: translateY(-2px);
+}
+.stat-number {
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 800;
+  font-family: 'Space Grotesk', monospace;
+  color: #EAB308;
+  margin-bottom: 0.3rem;
+}
+
+.breach-card {
+  background: #0F1F14;
+  border: 1px solid #1F3A24;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: border 0.2s;
+}
+.breach-card:hover {
+  border-color: #EAB308;
+}
+.data-tag {
+  display: inline-flex;
+  background: #0D1F12;
+  border: 1px solid #2D5A35;
+  border-radius: 2rem;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #C2F2A1;
+  margin: 0.2rem;
+}
+
+.type-tab {
+  background: transparent;
+  border: 1px solid #1F3A24;
+  border-radius: 0.6rem;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #8FBB85;
+}
+.type-tab.active {
+  background: linear-gradient(135deg, #0F6420, #1A7A2E);
+  border-color: #EAB308;
+  color: #FEF9C3;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.3);
+}
+
+.main-input {
+  width: 100%;
+  background: #0D1F12;
+  border: 1.5px solid #1F3A24;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1.2rem;
+  font-size: 0.95rem;
+  color: #F3F9F1;
+  outline: none;
+  transition: all 0.2s;
+}
+.main-input:focus {
+  border-color: #EAB308;
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.2);
+}
+
+.check-btn {
+  background: linear-gradient(135deg, #10B981, #059669);
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1.8rem;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.check-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #EAB308, #D97706);
+  color: #07120A;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.4);
+}
+.check-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nav-link {
+  color: #8FBB85;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  padding-bottom: 4px;
+}
+.nav-link.active {
+  color: #EAB308;
+  border-bottom-color: #EAB308;
+}
+
+.section {
+  scroll-margin-top: 80px;
+}
+
+@media (max-width: 700px) {
+  .type-tabs { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+  .check-row { flex-direction: column; }
+  .check-btn { width: 100%; justify-content: center; }
+  .table-row, .table-header {
+    grid-template-columns: 1fr 80px 80px !important;
+  }
+  .hide-mobile { display: none; }
+}
+
+.table-header, .table-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 120px 120px 40px;
+  padding: 0.8rem 1rem;
+  align-items: center;
+}
+.table-header {
+  background: #07120A;
+  border-bottom: 1px solid #EAB308;
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #EAB308;
+}
+.table-row {
+  border-bottom: 1px solid #1F3A24;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+.table-row:hover {
+  background: #0D1F12;
+}

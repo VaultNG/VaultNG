@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: intelligence-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nigersec}
+    username: ${DB_USER:nigersec}
+    password: ${DB_PASS:nigersec}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+    elasticsearch:
+      uris: ${ES_URI:http://localhost:9200}
+      username: ${ES_USER:}
+      password: ${ES_PASS:}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: nigersec-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.nigersec.*"
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+nigersec:
+  jwt:
+    secret: ${JWT_SECRET:nigersec-super-secret-key-change-in-production-min-256-bits}
+    expiration-ms: 86400000       # 24 hours
+    refresh-expiration-ms: 604800000  # 7 days
+  rate-limit:
+    citizen-queries-per-hour: 10
+    api-calls-per-minute: 100
+  dark-web:
+    api-key: ${DARK_WEB_API_KEY:}
+    base-url: ${DARK_WEB_API_URL:https://api.breachdirectory.org}
+  fraud:
+    risk-threshold-medium: 40
+    risk-threshold-high: 70
+
+logging:
+  level:
+    com.nigersec: DEBUG
+    org.springframework.security: INFO
