@@ -522,7 +522,86 @@ body, #root { margin: 0; padding: 0; width: 100%; }
   .id-sidebar { display: none; }
   .id-kpis { grid-template-columns: 1fr 1fr; }
   .id-grid-3 { grid-template-columns: 1fr; }
-  .id-main { padding: 1rem; }
+  .id-main { padding: 1rem 0.75rem 5rem; }
+
+  /* Nav */
+  .id-nav { padding: 0 1rem; height: 52px; }
+  .id-nav-org { display: none; }
+  .id-nav-brand { font-size: 0.85rem; }
+
+  /* KPIs */
+  .id-kpi-value { font-size: 1.4rem; }
+
+  /* Map height */
+  .id-map { height: 240px; }
+  .id-hotspot-label { font-size: 9px; padding: 1px 4px; }
+
+  /* Tables */
+  .id-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+  .id-table { min-width: 400px; }
+
+  /* Alert items */
+  .id-alert-item { flex-direction: column; gap: 8px; }
+  .id-alert-meta { flex-wrap: wrap; }
+  .id-alert-time { margin-left: 0; }
+
+  /* Peer grid */
+  .id-grid-2 .id-card { margin-bottom: 0.75rem; }
+
+  /* Export buttons */
+  .id-export-row { flex-wrap: wrap; }
+  .id-export-btn { font-size: 11px; padding: 6px 10px; }
+
+  /* Compliance month chips */
+  .id-month-row { gap: 4px; }
+  .id-month-chip { font-size: 10px; padding: 3px 7px; }
+
+  /* Submit form */
+  .id-form-input, .id-form-select, .id-form-textarea { font-size: 14px; }
+
+  /* Section head */
+  .id-section-head h2 { font-size: 0.9rem; }
+}
+@media (max-width: 480px) {
+  .id-kpis { grid-template-columns: 1fr; }
+  .id-kpi { padding: 0.8rem 1rem; }
+  .id-kpi-value { font-size: 1.3rem; }
+}
+
+/* Mobile bottom nav */
+.id-bottom-nav {
+  display: none;
+}
+@media (max-width: 768px) {
+  .id-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 250;
+    background: rgba(12,26,46,0.97);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    justify-content: space-around;
+    padding: 0.4rem 0 0.5rem;
+    box-shadow: 0 -2px 16px rgba(0,0,0,0.4);
+  }
+  .id-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 9px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 8px;
+    min-width: 48px;
+    transition: color 0.15s;
+  }
+  .id-bottom-nav-item.active { color: #4AE8A0; }
+  .id-bottom-nav-icon { font-size: 17px; line-height: 1; }
 }
 `;
 
@@ -840,7 +919,7 @@ function PanelCompliance() {
         </div>
         <div className="id-card">
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Reporting history</div>
-          <table className="id-table"><thead><tr><th>Month</th><th>Status</th><th>Score</th><th>Submitted</th></tr></thead><tbody>{items.filter(m => m.status !== 'upcoming').map(m => (<tr key={m.m}><td>{m.m} 2026</td><td><span className={`sev sev-${m.status === 'submitted' ? 'LOW' : 'MEDIUM'}`}>{m.status.toUpperCase()}</span></td><td>{m.score ? `${m.score}%` : '—'}</td><td>{m.status === 'submitted' ? '✓ On time' : 'Draft ready'}</td></tr>))}</tbody></table>
+          <div className="id-table-scroll"><table className="id-table"><thead><tr><th>Month</th><th>Status</th><th>Score</th><th>Submitted</th></tr></thead><tbody>{items.filter(m => m.status !== 'upcoming').map(m => (<tr key={m.m}><td>{m.m} 2026</td><td><span className={`sev sev-${m.status === 'submitted' ? 'LOW' : 'MEDIUM'}`}>{m.status.toUpperCase()}</span></td><td>{m.score ? `${m.score}%` : '—'}</td><td>{m.status === 'submitted' ? '✓ On time' : 'Draft ready'}</td></tr>))}</tbody></table></div>
         </div>
       </div>
     </div>
@@ -873,9 +952,9 @@ function PanelDashboard({ orgId }) {
         <div className="id-card"><div className="id-section-head"><h2><span className="id-refresh-dot" />Critical alerts</h2><span>5s refresh</span></div>{ALERTS.slice(0,3).map(a => (<div key={a.id} className={`id-alert-item${a.match ? ' match' : ''}`}><SevPill s={a.severity} /><div className="id-alert-body"><div className="id-alert-title">{a.title}</div><div className="id-alert-detail">{a.detail}</div><div className="id-alert-meta"><span className="id-alert-region">📍 {a.region}</span><span className="id-alert-time">{a.time}</span></div></div></div>))}</div>
         <div className="id-card"><div className="id-section-head"><h2>Fraud hotspots</h2><span>Nigeria {mapSource === 'live' && <span style={{ color: '#4AE8A0' }}>● Live</span>}</span></div><div className="id-map"><div className="id-map-grid" /><div className="id-map-label">NIGERIA · FRAUD DENSITY MAP</div>{mapPoints.map(h => (<div key={h.city} className="id-hotspot" style={{ left: `${h.x}%`, top: `${h.y}%` }}><div className="id-hotspot-ring" style={{ background: SEV_COLOR[h.severity] + '33' }} /><div className="id-hotspot-dot" style={{ background: SEV_COLOR[h.severity] }}><div className="id-hotspot-label" style={{ color: SEV_COLOR[h.severity] }}>{h.city} ({h.count})</div></div></div>))}<div className="id-map-legend">{Object.entries(SEV_COLOR).map(([sev, col]) => (<div key={sev} className="id-legend-item"><div className="id-legend-dot" style={{ background: col }} />{sev}</div>))}</div></div></div>
       </div>
-      <div className="id-grid-2">
-        <div className="id-card"><div className="id-section-head"><h2>Active attack patterns</h2><span>Matched to your profile</span></div><table className="id-table"><thead><tr><th>Pattern</th><th>Location</th><th>Severity</th><th>Match</th></tr></thead><tbody><tr><td>API credential theft</td><td>Lagos</td><td><SevPill s="HIGH" /></td><td style={{ color: '#FCA5A5' }}>✓ Matches</td></tr><tr><td>Login brute force</td><td>Nationwide</td><td><SevPill s="CRITICAL" /></td><td style={{ color: '#FCA5A5' }}>✓ Matches</td></tr><tr><td>Fake KYC portal</td><td>Abuja</td><td><SevPill s="MEDIUM" /></td><td style={{ color: 'var(--muted)' }}>Monitoring</td></tr></tbody></table></div>
-        <div className="id-card"><div className="id-section-head"><h2>Peer reports</h2><span>Anonymised pool</span></div><table className="id-table"><thead><tr><th>Sector</th><th>Issue</th><th>Action</th></tr></thead><tbody>{PEER_REPORTS.map(r => (<tr key={r.id}><td>{r.sector}</td><td>{r.issue}</td><td style={{ fontSize: 11, color: '#4AE8A0', fontFamily: 'var(--mono)' }}>{r.action.split('.')[0]}</td></tr>))}</tbody></table></div>
+        <div className="id-grid-2">
+        <div className="id-card"><div className="id-section-head"><h2>Active attack patterns</h2><span>Matched to your profile</span></div><div className="id-table-scroll"><table className="id-table"><thead><tr><th>Pattern</th><th>Location</th><th>Severity</th><th>Match</th></tr></thead><tbody><tr><td>API credential theft</td><td>Lagos</td><td><SevPill s="HIGH" /></td><td style={{ color: '#FCA5A5' }}>✓ Matches</td></tr><tr><td>Login brute force</td><td>Nationwide</td><td><SevPill s="CRITICAL" /></td><td style={{ color: '#FCA5A5' }}>✓ Matches</td></tr><tr><td>Fake KYC portal</td><td>Abuja</td><td><SevPill s="MEDIUM" /></td><td style={{ color: 'var(--muted)' }}>Monitoring</td></tr></tbody></table></div></div>
+        <div className="id-card"><div className="id-section-head"><h2>Peer reports</h2><span>Anonymised pool</span></div><div className="id-table-scroll"><table className="id-table"><thead><tr><th>Sector</th><th>Issue</th><th>Action</th></tr></thead><tbody>{PEER_REPORTS.map(r => (<tr key={r.id}><td>{r.sector}</td><td>{r.issue}</td><td style={{ fontSize: 11, color: '#4AE8A0', fontFamily: 'var(--mono)' }}>{r.action.split('.')[0]}</td></tr>))}</tbody></table></div></div>
       </div>
     </div>
   );
@@ -923,6 +1002,26 @@ function InstitutionDashboard({ user, onLogout }) {
           </aside>
           <main className="id-main">{renderPanel()}</main>
         </div>
+
+        {/* Mobile bottom navigation */}
+        <nav className="id-bottom-nav">
+          {[
+            { id: 'dashboard',  icon: '📊', label: 'Dashboard' },
+            { id: 'alerts',     icon: '🚨', label: 'Alerts' },
+            { id: 'bvn',        icon: '🏦', label: 'BVN/NIN' },
+            { id: 'phishing',   icon: '🎣', label: 'Phishing' },
+            { id: 'compliance', icon: '✅', label: 'NDPA' },
+          ].map(item => (
+            <div
+              key={item.id}
+              className={`id-bottom-nav-item${activePanel === item.id ? ' active' : ''}`}
+              onClick={() => setActivePanel(item.id)}
+            >
+              <span className="id-bottom-nav-icon">{item.icon}</span>
+              {item.label}
+            </div>
+          ))}
+        </nav>
       </div>
     </>
   );

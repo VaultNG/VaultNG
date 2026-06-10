@@ -391,6 +391,115 @@ const CSS = `
   /* API */
   .ns-api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
   @media (max-width: 700px) { .ns-api-grid { grid-template-columns: 1fr; } }
+
+  /* ── MOBILE RESPONSIVE ── */
+  /* Hamburger button — hidden on desktop */
+  .ns-hamburger {
+    display: none;
+    background: none;
+    border: 1px solid #4AE8A0;
+    color: #4AE8A0;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  @media (max-width: 768px) {
+    /* Nav */
+    .ns-nav-inner { padding: 0 1rem; position: relative; flex-wrap: wrap; height: auto; min-height: 56px; }
+    .ns-hamburger { display: block; }
+    .ns-nav-links {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+      position: absolute;
+      top: 56px;
+      left: 0;
+      right: 0;
+      background: rgba(7,18,10,0.98);
+      border-bottom: 1px solid #1F3A24;
+      padding: 0.5rem 0;
+      z-index: 999;
+    }
+    .ns-nav-links.ns-mobile-open { display: flex; }
+    .ns-nav-link {
+      padding: 0.75rem 1.5rem;
+      border-bottom: none;
+      border-radius: 0;
+      font-size: 1rem;
+    }
+    .ns-nav-links .ns-nav-btn { display: none; }
+    /* Move portal buttons below hamburger row on mobile */
+    .ns-nav-portal-btns {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem 0 0.5rem 0;
+    }
+    .ns-nav-btn { font-size: 0.8rem; padding: 0.35rem 0.8rem; }
+
+    /* Hero */
+    .ns-hero { padding: 3rem 1rem 2rem; }
+    .ns-h1 { font-size: clamp(1.6rem, 7vw, 2.5rem); }
+    .ns-sub { font-size: 0.95rem; }
+
+    /* Tabs */
+    .ns-tabs { gap: 0.4rem; }
+    .ns-tab { padding: 0.45rem 0.9rem; font-size: 0.82rem; }
+
+    /* Input row — stack on very small screens */
+    .ns-input-row { flex-direction: column; gap: 0.6rem; padding: 0 0.5rem; }
+    .ns-input { min-width: unset; width: 100%; }
+    .ns-check-btn { width: 100%; }
+
+    /* Result */
+    .ns-result-wrap { padding: 0 1rem; }
+    .ns-breach-row { flex-direction: column; gap: 0.5rem; }
+
+    /* Stats band */
+    .ns-stats-band { padding: 1.5rem 1rem; gap: 0.75rem; }
+    .ns-stat-card { min-width: 130px; padding: 1rem 1.2rem; flex: 1 1 130px; }
+    .ns-stat-num { font-size: 1.4rem; }
+
+    /* Sections */
+    .ns-section { padding: 2.5rem 1rem; }
+    .ns-section-title { font-size: 1.4rem; }
+
+    /* Breach table — scrollable */
+    .ns-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+    .ns-table { min-width: 540px; }
+    .ns-table-head,
+    .ns-table-row { padding: 0.75rem 0.9rem; font-size: 0.8rem; }
+
+    /* How it works grid */
+    .ns-hiw-grid { grid-template-columns: 1fr; }
+
+    /* Notify row — stack */
+    .ns-notify-row { flex-direction: column; gap: 0.6rem; padding: 0 0.5rem; }
+    .ns-notify-row .ns-input { width: 100%; }
+    .ns-notify-row .ns-check-btn { width: 100%; }
+
+    /* Fraud score demo grid */
+    .ns-score-demo-grid { grid-template-columns: 1fr !important; }
+
+    /* API section */
+    .ns-api-grid { gap: 1.5rem; }
+    .ns-code-block { font-size: 0.65rem; }
+
+    /* About */
+    .ns-about { padding: 2.5rem 1rem; }
+    .ns-about-h2 { font-size: 1.4rem; }
+
+    /* Footer */
+    .ns-footer { flex-direction: column; gap: 1.5rem; padding: 1.5rem 1rem; }
+  }
+
+  @media (max-width: 420px) {
+    .ns-h1 { font-size: 1.5rem; }
+    .ns-tab { padding: 0.4rem 0.65rem; font-size: 0.78rem; }
+    .ns-stat-card { flex: 1 1 100%; }
+  }
   .ns-api-label { font-size: 0.8rem; color: #EAB308; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
   .ns-api-h2 { font-family: 'Space Grotesk', sans-serif; font-size: 2rem; font-weight: 800; color: #FEF9C3; line-height: 1.2; margin-bottom: 0.8rem; }
   .ns-api-pricing { font-size: 0.85rem; color: #8FBB85; margin-top: 0.5rem; }
@@ -488,6 +597,7 @@ export default function Home() {
   const [notifyMsg, setNotifyMsg] = useState('');
   const [activeNav, setActiveNav] = useState('check');
   const [navHidden, setNavHidden] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const lastScrollY = useRef(0);
   const navigate = useNavigate();
 
@@ -667,42 +777,56 @@ export default function Home() {
         {/* ── NAV with hide/show class ── */}
         <nav className={`ns-nav ${navHidden ? 'ns-nav-hidden' : ''}`}>
           <div className="ns-nav-inner">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
-              <div className="ns-logo" onClick={() => scrollTo('check')}>
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <polygon points="13,2 24,7.5 24,18.5 13,24 2,18.5 2,7.5"
-                    fill="none" stroke="#EAB308" strokeWidth="1.8" />
-                  <circle cx="13" cy="13" r="3" fill="#FACC15" />
-                </svg>
-                NigerSec
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              {/* Left: logo + hamburger */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div className="ns-logo" onClick={() => { scrollTo('check'); setMobileMenuOpen(false); }}>
+                  <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+                    <polygon points="13,2 24,7.5 24,18.5 13,24 2,18.5 2,7.5"
+                      fill="none" stroke="#EAB308" strokeWidth="1.8" />
+                    <circle cx="13" cy="13" r="3" fill="#FACC15" />
+                  </svg>
+                  NigerSec
+                </div>
+                <button
+                  className="ns-hamburger"
+                  onClick={() => setMobileMenuOpen(o => !o)}
+                  aria-label="Toggle menu"
+                >
+                  {mobileMenuOpen ? '✕' : '☰'}
+                </button>
               </div>
-              <div className="ns-nav-links">
+
+              {/* Desktop nav links (hidden on mobile via CSS) */}
+              <div className={`ns-nav-links${mobileMenuOpen ? ' ns-mobile-open' : ''}`}>
                 {['check','breaches','howitworks','notify','api','about'].map(s => (
                   <span key={s}
                     className={`ns-nav-link${activeNav === s ? ' active' : ''}`}
-                    onClick={() => scrollTo(s)}>
+                    onClick={() => { scrollTo(s); setMobileMenuOpen(false); }}>
                     {{ check:'Check', breaches:'Breaches', howitworks:'How It Works',
                        notify:'Notify Me', api:'API', about:'About' }[s]}
                   </span>
                 ))}
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-              <button className="ns-nav-btn"
-                onClick={() => navigate('/citizen')}>
-                Dashboard
-              </button>
-              <button
-                className="ns-nav-btn"
-                style={{
-                  background: 'rgba(0,168,107,0.12)',
-                  borderColor: '#00A86B',
-                  color: '#4AE8A0',
-                }}
-                onClick={() => navigate('/institution')}
-              >
-                Institution Portal →
-              </button>
+
+              {/* Right: portal buttons */}
+              <div className="ns-nav-portal-btns" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                <button className="ns-nav-btn"
+                  onClick={() => navigate('/citizen')}>
+                  Dashboard
+                </button>
+                <button
+                  className="ns-nav-btn"
+                  style={{
+                    background: 'rgba(0,168,107,0.12)',
+                    borderColor: '#00A86B',
+                    color: '#4AE8A0',
+                  }}
+                  onClick={() => navigate('/institution')}
+                >
+                  Institution →
+                </button>
+              </div>
             </div>
           </div>
         </nav>
@@ -764,6 +888,7 @@ export default function Home() {
         <section id="breaches-section" className="ns-section">
           <h2 className="ns-section-title">🇳🇬 Nigerian Breach Database</h2>
           <p className="ns-section-sub">Known breaches affecting Nigerian citizens and institutions</p>
+          <div className="ns-table-scroll">
           <div className="ns-table">
             <div className="ns-table-head">
               <span>Breach</span><span>Records</span><span>Added</span><span>Date</span><span></span>
@@ -777,6 +902,7 @@ export default function Home() {
                 <span className="ns-table-arrow">→</span>
               </div>
             ))}
+          </div>
           </div>
         </section>
  

@@ -412,7 +412,72 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 @media (max-width: 768px) {
   .cd-sidebar { display: none; }
   .cd-kpis    { grid-template-columns: 1fr; }
-  .cd-main    { padding: 1rem; }
+  .cd-main    { padding: 1rem 0.75rem 5rem; }
+
+  /* Hero */
+  .cd-hero { padding: 1rem; }
+  .cd-hero-title { font-size: 1.1rem; }
+  .cd-hero-sub { font-size: 12px; }
+  .cd-hero-actions { gap: 0.5rem; }
+  .cd-btn { padding: 9px 14px; font-size: 12px; }
+
+  /* Nav */
+  .cd-nav { padding: 0 1rem; height: 56px; }
+  .cd-nav-user { display: none; }
+
+  /* KPI cards — full width on very small */
+  .cd-kpi-value { font-size: 1.5rem; }
+
+  /* Table scroll */
+  .cd-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+  .cd-table { min-width: 420px; }
+
+  /* AI advisor — smaller on mobile */
+  .cd-ai-widget { width: calc(100vw - 2rem) !important; right: 1rem !important; }
+
+  /* History check input row */
+  .cd-check-row { flex-direction: column !important; }
+  .cd-check-row input { width: 100% !important; }
+
+  /* Plan card */
+  .cd-plan-card { padding: 1rem; }
+  .cd-plan-price { font-size: 1.4rem; }
+}
+
+/* Mobile bottom nav bar (visible only on mobile) */
+.cd-bottom-nav {
+  display: none;
+}
+@media (max-width: 768px) {
+  .cd-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 150;
+    background: rgba(255,255,255,0.97);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    justify-content: space-around;
+    padding: 0.4rem 0 0.5rem;
+    box-shadow: 0 -2px 12px rgba(15,23,42,0.08);
+  }
+  .cd-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    min-width: 52px;
+    transition: color 0.15s;
+  }
+  .cd-bottom-nav-item.active { color: var(--blue); }
+  .cd-bottom-nav-item .cd-bn-icon { font-size: 18px; line-height: 1; }
 }
 `;
 
@@ -987,10 +1052,10 @@ function PanelHistory({ userId, onNewCheck }) {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }} className="cd-check-row">
           <input
             className="cd-field"
-            style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
+            style={{ flex: 1, minWidth: '160px', background: 'var(--bg)', border: '1px solid var(--border2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13, color: 'var(--text)', outline: 'none' }}
             placeholder={{ email: 'your@email.com', phone: '08012345678', nin: '12345678901', bvn: '12345678901' }[checkType]}
             value={checkValue}
             onChange={e => { setCheckValue(e.target.value); setCheckResult(null); }}
@@ -1030,6 +1095,7 @@ function PanelHistory({ userId, onNewCheck }) {
         {source === 'loading' ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading history…</div>
         ) : (
+          <div className="cd-table-scroll">
           <table className="cd-table">
             <thead>
               <tr>
@@ -1057,6 +1123,7 @@ function PanelHistory({ userId, onNewCheck }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
@@ -1264,6 +1331,26 @@ export default function CitizenDashboard() {
             {renderPanel()}
           </main>
         </div>
+
+        {/* Mobile bottom navigation bar */}
+        <nav className="cd-bottom-nav">
+          {[
+            { id: 'dashboard',  icon: '🏠', label: 'Home' },
+            { id: 'alerts',     icon: '🔔', label: 'Alerts' },
+            { id: 'monitoring', icon: '📡', label: 'Monitor' },
+            { id: 'history',    icon: '🕓', label: 'History' },
+            { id: 'profile',    icon: '👤', label: 'Profile' },
+          ].map(item => (
+            <div
+              key={item.id}
+              className={`cd-bottom-nav-item${panel === item.id ? ' active' : ''}`}
+              onClick={() => setPanel(item.id)}
+            >
+              <span className="cd-bn-icon">{item.icon}</span>
+              {item.label}
+            </div>
+          ))}
+        </nav>
       </div>
     </>
   );
