@@ -1,43 +1,98 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-//  API CONFIG 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+//  API CONFIG
+// Vite proxies /api → http://localhost:8080 in dev.
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
-//  SHA-256 (zero-knowledge hashing, runs in browser) 
-async function sha256Hex(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// NOTE: SHA helpers were present but unused; keep implementations in utilities if needed.
 
-//  API: fetch citizen alerts 
+//  API: fetch citizen monitoring subscriptions / alerts
 async function apiFetchAlerts(userId) {
-  const res = await fetch(`${API_URL}/v1/citizen/alerts?user_id=${encodeURIComponent(userId)}`);
+  const token = sessionStorage.getItem('ns_token');
+  const uid = userId || sessionStorage.getItem('ns_user_id');
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+  if (uid) headers['X-User-Id'] = uid;
+  const res = await fetch(`${API_BASE}/citizen/monitoring`, { headers });
   if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  // Backend returns { success, data: [...MonitoringSubscription] }
+  // Shape it into the {alerts:[]} form the panels expect
+  const subs = body.data || [];
+  const alerts = subs.map((s, i) => ({
+    id: s.id || i,
+    title: `${s.dataType} is being monitored`,
+    body: `Your ${s.dataType} identifier is actively monitored for breach exposure.`,
+    severity: 'MEDIUM',
+    time: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Active',
+  }));
+  return { alerts };
 }
 
-//  API: fetch check history 
+//  API: fetch check history — re-uses monitoring list as a proxy until
+//  a dedicated /citizen/history endpoint is added
 async function apiFetchHistory(userId) {
-  const res = await fetch(`${API_URL}/v1/citizen/history?user_id=${encodeURIComponent(userId)}`);
+  const token = sessionStorage.getItem('ns_token');
+  const uid = userId || sessionStorage.getItem('ns_user_id');
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+  if (uid) headers['X-User-Id'] = uid;
+  const res = await fetch(`${API_BASE}/citizen/monitoring`, { headers });
   if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  const subs = body.data || [];
+  const history = subs.map(s => ({
+    date: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Active',
+    identifier: s.dataType,
+    outcome: 'Monitoring active',
+    status: 'SAFE',
+  }));
+  return { history };
 }
 
-//  API: run a new breach check 
+//  API: login — calls real backend, stores JWT in sessionStorage
+async function apiLogin(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || `Login failed (${res.status})`);
+  // Store token so all subsequent API calls are authenticated
+  sessionStorage.setItem('ns_token', body.data.accessToken);
+  sessionStorage.setItem('ns_refresh_token', body.data.refreshToken);
+  sessionStorage.setItem('ns_user_id', body.data.userId);
+  return body.data;
+}
+
+//  API: register — calls real backend
+async function apiRegister(email, password) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, role: 'CITIZEN' }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || `Registration failed (${res.status})`);
+  sessionStorage.setItem('ns_token', body.data.accessToken);
+  sessionStorage.setItem('ns_refresh_token', body.data.refreshToken);
+  sessionStorage.setItem('ns_user_id', body.data.userId);
+  return body.data;
+}
+
+//  API: run a new breach check
 async function apiRunCheck(type, value) {
   const normalized = type === 'email'
     ? value.trim().toLowerCase()
     : value.replace(/\s/g, '').replace(/^0/, '234');
-  const hash = await sha256Hex(normalized);
-  const res = await fetch(`${API_URL}/v1/check`, {
+  const res = await fetch(`${API_BASE}/citizen/breach/check`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier_type: type, hash_prefix: hash.slice(0, 5) }),
+    body: JSON.stringify({ identifier: normalized, dataType: type.toUpperCase() }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  return { ...data, hash, timestamp: new Date().toISOString() };
+  const body = await res.json();
+  return { ...body.data, timestamp: new Date().toISOString() };
 }
 
 //  API: get AI advisor response (Gemini API) 
@@ -61,7 +116,9 @@ async function apiAskAdvisor(question, context) {
       }),
     }
   );
-  if (!res.ok) throw new Error(`Gemini API ${res.status}`);
+  if (res.status === 429) throw new Error('Rate limit reached — wait a moment and try again.');
+  if (res.status === 403) throw new Error('Invalid API key — check VITE_GEMINI_API_KEY in your .env file.');
+  if (!res.ok) throw new Error(`Gemini API error (${res.status})`);
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Unable to get advice right now.';
 }
@@ -238,9 +295,9 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
   background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 70%);
 }
 .cd-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-.cd-hero-title { font-family: var(--head); font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; }
+.cd-hero-title { font-family: var(--head); font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; line-height: 1.3; }
 .cd-hero-sub { color: var(--muted); font-size: 13px; max-width: 500px; line-height: 1.6; }
-.cd-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.2rem; }
+.cd-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.2rem; align-items: center; }
 
 /*  BADGES  */
 .cd-badge {
@@ -260,7 +317,7 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
   border: none; border-radius: var(--radius-sm);
   padding: 10px 18px; font-weight: 600; cursor: pointer;
   font-size: 13px; font-family: var(--body); transition: all 0.15s;
-  white-space: nowrap;
+  white-space: nowrap; display: inline-flex; align-items: center; justify-content: center;
 }
 .cd-btn-primary {
   background: linear-gradient(135deg, var(--blue), #1D4ED8);
@@ -278,14 +335,14 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 }
 
 /*  KPI ROW  */
-.cd-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
+.cd-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.2rem; align-items: stretch; }
 .cd-kpi {
   background: #fff; border: 1px solid var(--border);
   border-radius: var(--radius); padding: 1.1rem 1.2rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between;
 }
 .cd-kpi-label { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; margin-bottom: 8px; }
-.cd-kpi-value { font-family: var(--head); font-size: 1.8rem; font-weight: 700; color: var(--text); }
+.cd-kpi-value { font-family: var(--head); font-size: 1.8rem; font-weight: 700; color: var(--text); line-height: 1.1; }
 .cd-kpi-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
 
 /*  GRID  */
@@ -304,12 +361,12 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 
 /*  MONITORED ITEMS  */
 .cd-monitor-item {
-  display: flex; justify-content: space-between; align-items: flex-start;
+  display: flex; justify-content: space-between; align-items: center;
   padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg); margin-bottom: 8px; transition: border-color 0.15s;
+  background: var(--bg); margin-bottom: 8px; transition: border-color 0.15s; gap: 8px;
 }
 .cd-monitor-item:hover { border-color: var(--border2); }
-.cd-monitor-icon { font-size: 1.3rem; margin-right: 10px; margin-top: 2px; }
+.cd-monitor-icon { font-size: 1.3rem; margin-right: 10px; flex-shrink: 0; }
 .cd-monitor-label { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
 .cd-monitor-detail { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .cd-monitor-status {
@@ -342,15 +399,15 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 .cd-alert-body { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
 /*  TABLE  */
-.cd-table { width: 100%; border-collapse: collapse; }
+.cd-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .cd-table th {
   font-size: 11px; color: var(--muted); font-weight: 700;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
-  text-align: left; letter-spacing: 0.04em;
+  text-align: left; letter-spacing: 0.04em; white-space: nowrap;
 }
 .cd-table td {
   padding: 11px 12px; border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 13px; vertical-align: middle;
 }
 .cd-table tr:last-child td { border-bottom: none; }
 .cd-table tr:hover td { background: var(--bg); }
@@ -359,9 +416,9 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 .cd-toggle-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg); margin-bottom: 8px;
+  background: var(--bg); margin-bottom: 8px; gap: 12px;
 }
-.cd-toggle-label { font-weight: 600; font-size: 13px; }
+.cd-toggle-label { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; }
 .cd-toggle-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .cd-toggle {
   width: 40px; height: 22px; border-radius: 11px; border: none; cursor: pointer;
@@ -483,132 +540,152 @@ body, #root { margin: 0; padding: 0; width: 100%; background: var(--bg); }
 
 //  LOGIN PAGE COMPONENT 
 function CitizenLogin({ onLogin }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const handleSubmit = async (e) => {
+  const switchMode = (m) => { setMode(m); setError(''); setSuccess(''); setPassword(''); setConfirmPassword(''); };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email.trim()) {
-      setError('Please enter your email');
-      return;
-    }
-    if (!password) {
-      setError('Please enter your password');
-      return;
-    }
-
+    if (!email.trim()) { setError('Please enter your email'); return; }
+    if (!password)     { setError('Please enter your password'); return; }
     setIsLoading(true);
-    setTimeout(() => {
-      if (email.includes('@') && password.length > 0) {
-        if (rememberMe) {
-          localStorage.setItem('nigersec_citizen', JSON.stringify({
-            email,
-            name: email.split('@')[0]
-          }));
-        }
-        onLogin({ email, name: email.split('@')[0] });
-      } else {
-        setError('Invalid credentials. Please try again.');
+    try {
+      const userData = await apiLogin(email, password);
+      if (rememberMe) {
+        localStorage.setItem('nigersec_citizen', JSON.stringify({ email, name: email.split('@')[0] }));
       }
+      onLogin({ email, name: email.split('@')[0], userId: userData.userId, role: userData.role });
+    } catch (err) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!email.trim())         { setError('Please enter your email'); return; }
+    if (!password)             { setError('Please enter a password'); return; }
+    if (password.length < 8)   { setError('Password must be at least 8 characters'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    setIsLoading(true);
+    try {
+      const userData = await apiRegister(email, password);
+      if (rememberMe) {
+        localStorage.setItem('nigersec_citizen', JSON.stringify({ email, name: email.split('@')[0] }));
+      }
+      onLogin({ email, name: email.split('@')[0], userId: userData.userId, role: userData.role });
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const inputStyle = (hasErr) => ({
+    width: '100%', background: '#111827',
+    border: `1px solid ${hasErr ? '#EF4444' : '#374151'}`,
+    borderRadius: '10px', padding: '12px 0.2px',
+    color: '#F9FAFB', fontSize: '14px', outline: 'none', textAlign: 'center'
+  });
 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       backgroundImage: 'url("https://i.pinimg.com/736x/4e/83/42/4e8342492352e83f8cbe060c94d11c81.jpg")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      backgroundSize: 'cover', backgroundPosition: 'center',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: "var(--body), 'DM Sans', sans-serif"
     }}>
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'rgba(7, 17, 31, 0.75)',
-        backdropFilter: 'blur(2px)'
-      }} />
-      <div style={{
-        position: 'relative', zIndex: 2,
-        width: '100%', maxWidth: '440px',
-        margin: '1.5rem',
-        animation: 'fadeUp 0.4s ease-out'
-      }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(7, 17, 31, 0.75)', backdropFilter: 'blur(2px)' }} />
+      <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: '440px', margin: '1.5rem', animation: 'fadeUp 0.4s ease-out' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            width: '64px', height: '64px', margin: '0 auto 1rem',
-            background: 'linear-gradient(135deg, rgba(0,168,107,0.2), rgba(0,135,81,0.15))',
-            border: '1px solid rgba(0,168,107,0.4)',
-            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '28px'
-          }}></div>
-          <h1 style={{
-            fontSize: '1.75rem', fontWeight: 800,
-            color: '#FEF9C3', letterSpacing: '-0.02em'
-          }}>NigerSec</h1>
-          <p style={{
-            fontSize: '0.85rem', color: '#9CA3AF',
-            textTransform: 'uppercase', letterSpacing: '0.05em'
-          }}>Citizen Breach Protection</p>
+          <div style={{ width: '64px', height: '64px', margin: '0 auto 1rem', background: 'linear-gradient(135deg, rgba(0,168,107,0.2), rgba(0,135,81,0.15))', border: '1px solid rgba(0,168,107,0.4)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}></div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FEF9C3', letterSpacing: '-0.02em' }}>NigerSec</h1>
+          <p style={{ fontSize: '0.85rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Citizen Breach Protection</p>
         </div>
-        <div style={{
-          background: 'rgba(17,24,39,0.95)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(0,168,107,0.3)',
-          borderRadius: '20px',
-          padding: '2rem 1.8rem',
-          boxShadow: '0 20px 35px -10px black'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <span style={{
-              display: 'inline-block',
-              background: 'rgba(0,168,107,0.1)',
-              border: '1px solid rgba(0,168,107,0.2)',
-              borderRadius: '20px',
-              padding: '5px 14px',
-              fontSize: '11px',
-              color: '#4AE8A0'
-            }}>Secure Citizen Login</span>
+        <div style={{ background: 'rgba(17,24,39,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,168,107,0.3)', borderRadius: '20px', padding: '2rem 1.8rem', boxShadow: '0 20px 35px -10px black' }}>
+
+          {/* Tab toggle */}
+          <div style={{ display: 'flex', background: '#111827', borderRadius: '12px', padding: '4px', marginBottom: '1.5rem', gap: '4px' }}>
+            {['login', 'signup'].map(m => (
+              <button key={m} type="button" onClick={() => switchMode(m)} style={{
+                flex: 1, padding: '8px', border: 'none', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                background: mode === m ? 'linear-gradient(135deg, #00A86B, #008751)' : 'transparent',
+                color: mode === m ? '#fff' : '#9CA3AF', transition: 'all 0.2s'
+              }}>
+                {m === 'login' ? 'Login' : 'Sign Up'}
+              </button>
+            ))}
           </div>
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '1.2rem' }}>
-              <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Email Address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com"
-                style={{ width: '100%', background: '#111827', border: `1px solid ${error && !email ? '#EF4444' : '#374151'}`, borderRadius: '10px', padding: '12px 0.2px', color: '#F9FAFB', fontSize: '14px', outline: 'none', textAlign: 'center' }} />
-            </div>
-            <div style={{ marginBottom: '0.8rem' }}>
-              <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Password</label>
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-                style={{ width: '100%', background: '#111827', border: `1px solid ${error && !password ? '#EF4444' : '#374151'}`, borderRadius: '10px', padding: '12px 0.2px', color: '#F9FAFB', fontSize: '14px', outline: 'none', textAlign: 'center' }} />
-            </div>
-            <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input type="checkbox" id="showPassword" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />
-              <label htmlFor="showPassword" style={{ fontSize: '12px', color: '#9CA3AF', cursor: 'pointer' }}>Show Password</label>
-            </div>
-            {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '8px 12px', marginBottom: '1rem', fontSize: '12px', color: '#FCA5A5', textAlign: 'center' }}>{error}</div>}
-            <button type="submit" disabled={isLoading}
-              style={{ width: '100%', background: 'linear-gradient(135deg, #00A86B, #008751)', border: 'none', borderRadius: '10px', padding: '12px', color: 'white', fontSize: '14px', fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', marginBottom: '1rem' }}>
-              {isLoading ? 'Authenticating...' : 'LOGIN →'}
-            </button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '1.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
-                <span style={{ color: '#9CA3AF' }}>Remember me</span>
-              </label>
-              <a href="#" style={{ color: '#4AE8A0', textDecoration: 'none' }} onClick={e => e.preventDefault()}>Forgot Password?</a>
-            </div>
-            <div style={{ textAlign: 'center', borderTop: '1px solid #374151', paddingTop: '1rem' }}>
-              <p style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '6px' }}>Don't have an account?</p>
-              <a href="#" style={{ color: '#4AE8A0', fontSize: '12px', textDecoration: 'none' }} onClick={e => e.preventDefault()}>Sign up for free →</a>
-            </div>
-          </form>
+
+          {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '8px 12px', marginBottom: '1rem', fontSize: '12px', color: '#FCA5A5', textAlign: 'center' }}>{error}</div>}
+          {success && <div style={{ background: 'rgba(0,168,107,0.1)', border: '1px solid rgba(0,168,107,0.3)', borderRadius: '10px', padding: '8px 12px', marginBottom: '1rem', fontSize: '12px', color: '#4AE8A0', textAlign: 'center' }}>{success}</div>}
+
+          {mode === 'login' ? (
+            <form onSubmit={handleLogin}>
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Email Address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" style={inputStyle(error && !email)} />
+              </div>
+              <div style={{ marginBottom: '0.8rem' }}>
+                <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Password</label>
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inputStyle(error && !password)} />
+              </div>
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="checkbox" id="clShowPw" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />
+                <label htmlFor="clShowPw" style={{ fontSize: '12px', color: '#9CA3AF', cursor: 'pointer' }}>Show Password</label>
+              </div>
+              <button type="submit" disabled={isLoading}
+                style={{ width: '100%', background: 'linear-gradient(135deg, #00A86B, #008751)', border: 'none', borderRadius: '10px', padding: '12px', color: 'white', fontSize: '14px', fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', marginBottom: '1rem', opacity: isLoading ? 0.7 : 1 }}>
+                {isLoading ? 'Authenticating...' : 'LOGIN →'}
+              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+                  <span style={{ color: '#9CA3AF' }}>Remember me</span>
+                </label>
+                <a href="#" style={{ color: '#4AE8A0', textDecoration: 'none' }} onClick={e => e.preventDefault()}>Forgot Password?</a>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister}>
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Email Address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" style={inputStyle(error && !email)} />
+              </div>
+              <div style={{ marginBottom: '0.8rem' }}>
+                <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Password <span style={{ color: '#6B7280' }}>(min 8 characters)</span></label>
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inputStyle(error && !password)} />
+              </div>
+              <div style={{ marginBottom: '0.8rem' }}>
+                <label style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '6px', display: 'block' }}>Confirm Password</label>
+                <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" style={inputStyle(error && confirmPassword && password !== confirmPassword)} />
+              </div>
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="checkbox" id="suShowPw" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />
+                <label htmlFor="suShowPw" style={{ fontSize: '12px', color: '#9CA3AF', cursor: 'pointer' }}>Show Password</label>
+              </div>
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="checkbox" id="suRemember" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+                <label htmlFor="suRemember" style={{ fontSize: '12px', color: '#9CA3AF', cursor: 'pointer' }}>Remember me</label>
+              </div>
+              <button type="submit" disabled={isLoading}
+                style={{ width: '100%', background: 'linear-gradient(135deg, #00A86B, #008751)', border: 'none', borderRadius: '10px', padding: '12px', color: 'white', fontSize: '14px', fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.7 : 1 }}>
+                {isLoading ? 'Creating Account...' : 'CREATE ACCOUNT →'}
+              </button>
+            </form>
+          )}
         </div>
         <div style={{ textAlign: 'center', marginTop: '1.2rem', fontSize: '11px', color: '#6B7280', display: 'flex', justifyContent: 'center', gap: '16px' }}>
           <span>256-bit SSL Encrypted</span> <span>•</span> <span>NDPA 2023 Compliant</span>
@@ -641,8 +718,8 @@ function AIAdvisor({ context }) {
     try {
       const reply = await apiAskAdvisor(question, context);
       setMessages(m => [...m, { role: 'assistant', text: reply }]);
-    } catch {
-      setMessages(m => [...m, { role: 'assistant', text: 'Backend offline. Deploy your API to enable AI advice.' }]);
+    } catch (err) {
+      setMessages(m => [...m, { role: 'assistant', text: `AI error: ${err.message}` }]);
     } finally {
       setLoading(false);
     }
@@ -714,11 +791,23 @@ function PanelDashboard({ setPanel, userId }) {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    // Try to fetch a real risk summary; fall back to safe defaults
-    fetch(`${API_URL}/v1/citizen/summary?user_id=${encodeURIComponent(userId || 'demo')}`)
+    // Derive a live summary from monitoring subscriptions
+    const token = sessionStorage.getItem('ns_token');
+    fetch(`${API_BASE}/citizen/monitoring`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => setSummary(data))
-      .catch(() => setSummary({ active_alerts: 0, last_check: '2h ago', risk_level: 'SAFE', breaches_total: 0 }));
+      .then(body => {
+        const subs = body.data || [];
+        setSummary({
+          active_alerts: subs.length,
+          last_check: subs.length > 0 && subs[0].createdAt
+            ? new Date(subs[0].createdAt).toLocaleDateString() : 'Never',
+          risk_level: subs.length > 0 ? 'MONITORED' : 'SAFE',
+          breaches_total: subs.length,
+        });
+      })
+      .catch(() => setSummary({ active_alerts: 0, last_check: '—', risk_level: 'SAFE', breaches_total: 0 }));
   }, [userId]);
 
   const isBreached = summary?.active_alerts > 0;
@@ -1224,19 +1313,15 @@ const PANEL_TITLES = {
 
 //  MAIN COMPONENT 
 export default function CitizenDashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('nigersec_citizen');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('nigersec_citizen'));
   const [panel, setPanel] = useState('dashboard');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const saved = localStorage.getItem('nigersec_citizen');
-    if (saved) {
-      const userData = JSON.parse(saved);
-      setUser(userData);
-      setIsAuthenticated(true);
-    }
-  }, []);
+  // user and isAuthenticated are initialized lazily from localStorage
 
   const handleLogin = (userData) => {
     setUser(userData);

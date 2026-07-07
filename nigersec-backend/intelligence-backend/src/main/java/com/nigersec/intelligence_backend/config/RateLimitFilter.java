@@ -35,21 +35,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if ("/api/v1/citizen/breach/check".equals(request.getRequestURI())
                 && "POST".equalsIgnoreCase(request.getMethod())) {
 
-            String clientIp = getClientIp(request);
-            String key = "rate:breach:" + clientIp;
+            try {
+                String clientIp = getClientIp(request);
+                String key = "rate:breach:" + clientIp;
 
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
+                Long count = redisTemplate.opsForValue().increment(key);
+                // Always refresh the TTL so the window resets correctly even after a Redis restart
                 redisTemplate.expire(key, Duration.ofHours(1));
-            }
 
-            if (count != null && count > citizenQueriesPerHour) {
-                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-                response.setContentType("application/json");
-                response.getWriter().write(
-                        "{\"success\":false,\"error\":\"Rate limit exceeded. Maximum " +
-                        citizenQueriesPerHour + " breach checks per hour.\"}");
-                return;
+                if (count != null && count > citizenQueriesPerHour) {
+                    response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                            "{\"success\":false,\"error\":\"Rate limit exceeded. Maximum " +
+                            citizenQueriesPerHour + " breach checks per hour per IP.\"}");
+                    return;
+                }
+            } catch (Exception e) {
+                // Redis unavailable — allow the request through rather than blocking all traffic
+                log.warn("Rate limit check skipped: Redis unavailable ({})", e.getMessage());
             }
         }
 

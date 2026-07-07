@@ -36,14 +36,18 @@ public class KafkaEventPublisher {
     }
 
     private void send(String topic, Object payload) {
-        kafkaTemplate.send(topic, payload)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to publish to topic {}: {}", topic, ex.getMessage());
-                    } else {
-                        log.debug("Published to topic {} offset {}", topic,
-                                result.getRecordMetadata().offset());
-                    }
-                });
+        try {
+            kafkaTemplate.send(topic, payload)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            log.error("Failed to publish to topic {}: {}", topic, ex.getMessage());
+                        } else {
+                            log.debug("Published to topic {} offset {}", topic,
+                                    result.getRecordMetadata().offset());
+                        }
+                    });
+        } catch (Exception e) {
+            log.error("Kafka send threw synchronously for topic {}: {}", topic, e.getMessage());
+        }
     }
 }

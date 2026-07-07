@@ -1,0 +1,26 @@
+# ============================================================
+#  NigerSec — Production profile overrides
+#  Activated with: SPRING_PROFILES_ACTIVE=prod
+#
+#  All values that are NOT listed here inherit from
+#  application.yaml.  Override any of them with environment
+#  variables (see RUNNING.md → "Running in production").
+# ============================================================
+
+spring:
+  jpa:
+    hibernate:
+      # In production never auto-alter the schema — use migrations instead
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+logging:
+  level:
+    # Reduce noise in production — only warnings and above from internal packages
+    com.nigersec: WARN
+    org.springframework.security: WARN
+    org.springframework.kafka: WARN
+    root: WARN

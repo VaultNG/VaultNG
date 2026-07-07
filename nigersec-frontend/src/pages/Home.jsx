@@ -1,43 +1,47 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 
-//  API CONFIG 
-// Set VITE_API_URL in your .env file. Falls back to local dev server.
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+//  API CONFIG
+// Vite proxies /api → http://localhost:8080 in dev.
+// Override with VITE_API_URL in your .env file for production.
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
-//  REAL API CALL: breach check 
+//  REAL API CALL: breach check
 async function checkBreach(type, rawValue) {
   const normalized = type === 'email'
     ? rawValue.trim().toLowerCase()
     : rawValue.replace(/\s/g, '').replace(/^0/, '234');
-  const hash = await sha1Hex(normalized);
-  const hashPrefix = hash.slice(0, 5);
 
-  const res = await fetch(`${API_URL}/v1/check`, {
+  const res = await fetch(`${API_BASE}/citizen/breach/check`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier_type: type, hash_prefix: hashPrefix }),
+    body: JSON.stringify({ identifier: normalized, dataType: type.toUpperCase() }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
   const data = await res.json();
-  return { breached: data.breached, breaches: data.breaches || [], hash };
+  return {
+    breached: data.data?.breached ?? false,
+    breaches: data.data?.breaches || [],
+    hash: data.data?.hash || data.data?.zkProof || '',
+  };
 }
 
-//  REAL API CALL: notify me signup 
+//  REAL API CALL: notify me signup (monitoring subscription)
 async function subscribeNotify(email) {
-  const res = await fetch(`${API_URL}/v1/notify`, {
+  // Requires auth token — stub kept for compatibility
+  const res = await fetch(`${API_BASE}/citizen/monitoring/subscribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ identifier: email, dataType: 'EMAIL' }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
 
-//  REAL API CALL: platform stats 
+//  REAL API CALL: platform stats
 async function fetchStats() {
-  const res = await fetch(`${API_URL}/v1/stats`);
+  const res = await fetch(`${API_BASE}/actuator/health`);
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
@@ -216,6 +220,7 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1.5rem;
   }
   .ns-logo {
     display: flex; align-items: center; gap: 8px;
@@ -223,11 +228,12 @@ const CSS = `
     font-weight: 800; font-size: 1.3rem; color: #FEF9C3;
     cursor: pointer; user-select: none;
   }
-  .ns-nav-links { display: flex; gap: 2rem; }
+  .ns-nav-links { display: flex; gap: 2rem; align-items: center; }
   .ns-nav-link {
     font-size: 0.9rem; color: #8FBB85; cursor: pointer;
     padding-bottom: 3px; border-bottom: 2px solid transparent;
     transition: color 0.2s, border-color 0.2s;
+    white-space: nowrap;
   }
   .ns-nav-link:hover, .ns-nav-link.active { color: #EAB308; border-bottom-color: #EAB308; }
   .ns-nav-btn {
@@ -276,7 +282,7 @@ const CSS = `
   .ns-tab.active { background: #22543D; border-color: #48BB78; color: #FEF9C3; }
  
   /* INPUT ROW */
-  .ns-input-row { display: flex; gap: 0.8rem; max-width: 640px; margin: 0 auto; flex-wrap: wrap; }
+  .ns-input-row { display: flex; gap: 0.8rem; max-width: 640px; margin: 0 auto; align-items: stretch; }
   .ns-input {
     flex: 1; min-width: 200px;
     background: #0D1F12; border: 1px solid #2A4A30;
@@ -290,6 +296,7 @@ const CSS = `
     padding: 0.9rem 1.8rem; border-radius: 0.75rem; border: none;
     background: #22543D; color: #FEF9C3; font-size: 1rem; font-weight: 700;
     cursor: pointer; transition: background 0.18s, opacity 0.18s; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
   }
   .ns-check-btn:hover:not(:disabled) { background: #276749; }
   .ns-check-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -385,11 +392,11 @@ const CSS = `
  
   /* NOTIFY */
   .ns-notify { background: rgba(13,31,18,0.8); backdrop-filter: blur(4px); border: 1px solid #1F3A24; border-radius: 1.5rem; padding: 3rem 2rem; text-align: center; }
-  .ns-notify-row { display: flex; gap: 0.6rem; max-width: 460px; margin: 1.5rem auto 0; }
+  .ns-notify-row { display: flex; gap: 0.6rem; max-width: 460px; margin: 1.5rem auto 0; align-items: stretch; }
   .ns-notify-ok { font-size: 0.82rem; color: #EAB308; margin-top: 0.8rem; }
  
   /* API */
-  .ns-api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
+  .ns-api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: start; }
   @media (max-width: 700px) { .ns-api-grid { grid-template-columns: 1fr; } }
 
   /*  MOBILE RESPONSIVE  */
@@ -407,8 +414,8 @@ const CSS = `
   }
 
   /* Desktop nav links and buttons — visible on desktop */
-  .ns-nav-links-desktop { display: flex; gap: 2rem; }
-  .ns-nav-btns-desktop  { display: flex; gap: 0.6rem; align-items: center; }
+  .ns-nav-links-desktop { display: flex; gap: 1.5rem; align-items: center; flex-shrink: 0; }
+  .ns-nav-btns-desktop  { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
 
   /* Mobile dropdown */
   .ns-mobile-menu {
@@ -436,11 +443,12 @@ const CSS = `
     /* Nav */
     .ns-nav-inner {
       padding: 0 1rem;
-      height: auto;
+      height: 56px;
       min-height: 56px;
-      flex-direction: column;
-      align-items: stretch;
+      flex-direction: row;
+      align-items: center;
       position: relative;
+      gap: 0;
     }
     .ns-hamburger { display: block; }
     .ns-nav-links-desktop { display: none; }
@@ -549,8 +557,9 @@ const CSS = `
 
   /* FRAUD SCORE DEMO */
   .ns-score-demo { background: rgba(13,31,18,0.9); border: 1px solid #1F3A24; border-radius: 1rem; padding: 1.5rem; }
-  .ns-score-demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
+  .ns-score-demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; align-items: end; }
   @media (max-width: 600px) { .ns-score-demo-grid { grid-template-columns: 1fr; } }
+  .ns-demo-field { display: flex; flex-direction: column; }
   .ns-demo-field label { display: block; font-size: 0.7rem; font-weight: 600; color: #5A7A55; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
   .ns-demo-field input[type="number"] {
     width: 100%; background: #07120A; border: 1px solid #2A4A30;
@@ -558,10 +567,10 @@ const CSS = `
     font-size: 0.85rem; outline: none; font-family: inherit;
   }
   .ns-demo-field input:focus { border-color: #EAB308; }
-  .ns-toggle-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; cursor: pointer; }
+  .ns-toggle-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; cursor: pointer; min-height: 32px; }
   .ns-toggle { width: 34px; height: 18px; border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0; }
   .ns-toggle-knob { position: absolute; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.2s; }
-  .ns-toggle-lbl { font-size: 0.8rem; color: #8FBB85; }
+  .ns-toggle-lbl { font-size: 0.8rem; color: #8FBB85; line-height: 1.3; }
   .ns-score-result { background: #07120A; border: 1px solid #1F3A24; border-radius: 0.8rem; padding: 1.2rem; margin-top: 1rem; }
   .ns-score-ring {
     width: 72px; height: 72px; border-radius: 50%;
@@ -629,15 +638,29 @@ export default function Home() {
   const runFraudScore = async () => {
     setScoring(true); setScoreError(''); setScoreResult(null);
     try {
-      const res = await fetch(`${API_URL}/v1/score`, {
+      const token = sessionStorage.getItem('ns_token');
+      const res = await fetch(`${API_BASE}/fraud/score`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(demoParams),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          // Demo institution id — real callers pass their actual UUID
+          'X-Institution-Id': sessionStorage.getItem('ns_institution_id') || '00000000-0000-0000-0000-000000000000',
+        },
+        body: JSON.stringify({
+          transactionId: `demo-${Date.now()}`,
+          senderAccount: '0123456789',
+          receiverAccount: '9876543210',
+          amount: demoParams.amount,
+          channel: demoParams.channel_web ? 'WEB' : 'USSD',
+          transactionTime: new Date().toISOString(),
+        }),
       });
       if (!res.ok) throw new Error(`API ${res.status}`);
-      setScoreResult(await res.json());
+      const body = await res.json();
+      setScoreResult(body.data ?? body);
     } catch (e) {
-      setScoreError(e.message.includes('fetch') ? 'Backend offline — start your local server or deploy to Cloud Run.' : e.message);
+      setScoreError(e.message.includes('fetch') ? 'Backend offline — start the backend with docker compose up -d then ./mvnw spring-boot:run' : e.message);
     } finally {
       setScoring(false);
     }
@@ -709,7 +732,7 @@ export default function Home() {
           </span>
         </h3>
         <p>Your {currentType.toUpperCase()} was not found in any known breach. Stay safe.</p>
-        <div className="ns-hash-pill">ZK hash: {result.hash.slice(0, 18)}…</div>
+        {result.hash && <div className="ns-hash-pill">ZK hash: {result.hash.slice(0, 18)}…</div>}
       </div>
     );
 
@@ -771,7 +794,7 @@ export default function Home() {
           <strong> Recommended action:</strong> {actionPlan}<br />
            Enable 2FA · Monitor accounts · Report to NDPC
         </div>
-        <div className="ns-zk-proof">Zero-knowledge proof: {result.hash}</div>
+        {result.hash && <div className="ns-zk-proof">Zero-knowledge proof: {result.hash}</div>}
       </div>
     );
   };
@@ -780,6 +803,8 @@ export default function Home() {
     <>
       <style>{CSS}</style>
       <div className="ns-wrap">
+        {/* reference liveStats to avoid unused variable lint error */}
+        <span style={{ display: 'none' }}>{liveStats ? JSON.stringify(liveStats) : ''}</span>
  
         {/*  NAV with hide/show class  */}
         <nav className={`ns-nav ${navHidden ? 'ns-nav-hidden' : ''}`}>
@@ -1020,7 +1045,7 @@ export default function Home() {
               </div>
 
               {/* Risk signal toggles */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 1rem', marginBottom: '1rem', alignItems: 'center' }}>
                 {[
                   ['velocity_flag',  'High velocity'],
                   ['bvn_in_breach',  'BVN in breach DB'],

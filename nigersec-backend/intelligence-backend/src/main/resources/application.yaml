@@ -7,6 +7,9 @@ spring:
     username: ${DB_USER:nigersec}
     password: ${DB_PASS:nigersec}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 10000
+      initialization-fail-timeout: 30000
 
   jpa:
     hibernate:
@@ -23,23 +26,27 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
-    elasticsearch:
-      uris: ${ES_URI:http://localhost:9200}
-      username: ${ES_USER:}
-      password: ${ES_PASS:}
+      connect-timeout: 2000ms
 
   kafka:
     bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # Don't block the app thread if Kafka is temporarily unavailable
+      properties:
+        max.block.ms: 3000
+        request.timeout.ms: 3000
+        delivery.timeout.ms: 10000
     consumer:
       group-id: nigersec-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.nigersec.*"
+        "[spring.json.trusted.packages]": "com.nigersec.*"
+    listener:
+      missing-topics-fatal: false   # don't crash if topics don't exist yet on first boot
 
 server:
   port: 8080
@@ -47,6 +54,11 @@ server:
     context-path: /api/v1
 
 nigersec:
+  cors:
+    allowed-origins:
+      - "http://localhost:5173"
+      - "http://localhost:3000"
+      - "${FRONTEND_URL:}"
   jwt:
     secret: ${JWT_SECRET:nigersec-super-secret-key-change-in-production-min-256-bits}
     expiration-ms: 86400000       # 24 hours
@@ -55,13 +67,23 @@ nigersec:
     citizen-queries-per-hour: 10
     api-calls-per-minute: 100
   dark-web:
-    api-key: ${DARK_WEB_API_KEY:}
-    base-url: ${DARK_WEB_API_URL:https://api.breachdirectory.org}
+    api-key: 5dd5a9a8e2msha6dfaa2274b97fap146115jsn063d72c2de53
+    base-url: ${DARK_WEB_API_URL:https://breachdirectory.p.rapidapi.com}
   fraud:
     risk-threshold-medium: 40
     risk-threshold-high: 70
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 logging:
   level:
     com.nigersec: DEBUG
     org.springframework.security: INFO
+    org.springframework.kafka: WARN
